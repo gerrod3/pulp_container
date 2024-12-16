@@ -103,6 +103,9 @@ jobs:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           GITHUB_CONTEXT: "${{ github.event.pull_request.commits_url }}"
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+
       - name: "Before Script"
         run: |
           .github/workflows/scripts/before_script.sh
