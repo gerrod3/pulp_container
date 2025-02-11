@@ -6,15 +6,16 @@ import subprocess
 from pulp_container.tests.functional.constants import REGISTRY_V2
 
 
-def run_flatpak_commands(pulp_settings):
+def run_flatpak_commands(host):
     # Install flatpak:
     subprocess.check_call(
         [
             "flatpak",
             "--user",
             "remote-add",
+            "--no-gpg-verify",
             "pulptest",
-            "oci+" + pulp_settings.CONTENT_ORIGIN,
+            "oci+" + host,
         ]
     )
     # See <https://pagure.io/fedora-lorax-templates/c/cc1155372046baa58f9d2cc27a9e5473bf05a3fb>
@@ -63,6 +64,7 @@ def test_flatpak_install(
     container_tag_api,
     container_manifest_api,
     pulp_settings,
+    bindings_cfg,
 ):
     if not pulp_settings.FLATPAK_INDEX:
         pytest.skip("This test requires FLATPAK_INDEX to be enabled")
@@ -83,7 +85,7 @@ def test_flatpak_install(
     assert manifest.is_flatpak
     assert not manifest.is_bootable
 
-    run_flatpak_commands(pulp_settings)
+    run_flatpak_commands(bindings_cfg.host)
 
 
 def test_flatpak_on_demand(
@@ -98,6 +100,7 @@ def test_flatpak_on_demand(
     monitor_task,
     add_to_cleanup,
     pulp_settings,
+    bindings_cfg,
 ):
     if not pulp_settings.FLATPAK_INDEX:
         pytest.skip("This test requires FLATPAK_INDEX to be enabled")
@@ -134,4 +137,4 @@ def test_flatpak_on_demand(
     )
     monitor_task(reclaim_response.task)
 
-    run_flatpak_commands(pulp_settings)
+    run_flatpak_commands(bindings_cfg.host)
