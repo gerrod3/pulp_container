@@ -511,9 +511,10 @@ def pull_through_distribution(
             },
         )
 
+        name = str(uuid4())
         data = {
-            "name": str(uuid4()),
-            "base_path": str(uuid4()),
+            "name": name,
+            "base_path": name,
             "remote": remote.pulp_href,
             "private": private,
         }

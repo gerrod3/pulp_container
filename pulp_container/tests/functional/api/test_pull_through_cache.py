@@ -1,11 +1,15 @@
 import subprocess
 from subprocess import CalledProcessError
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from django.conf import settings
 
-from pulp_container.constants import MANIFEST_TYPE
+from pulp_container.constants import (
+    MANIFEST_TYPE,
+    PULL_THROUGH_DISTRIBUTION_LABEL,
+    PULL_THROUGH_DISTRIBUTION_LABEL_VALUE,
+)
 from pulp_container.tests.functional.constants import (
     PULP_FIXTURE_1,
     PULP_FIXTURE_1_MANIFEST_A_DIGEST,
@@ -60,7 +64,7 @@ def pull_and_verify(
         tags_to_verify = []
         for version, image_path in enumerate(images, start=1):
             remote_image_path = f"{REGISTRY_V2}/{image_path}"
-            local_image_path = f"{pull_through_distribution.base_path}/{image_path}"
+            local_image_path = f"{pull_through_distribution.name}/{image_path}"
             local_image_pull_path = full_path(local_image_path)  # Handle if domain is enabled
 
             # 0. test if an anonymous user cannot pull new content through the pull-through cache
@@ -122,6 +126,17 @@ def pull_and_verify(
     return _pull_and_verify
 
 
+def test_pull_through_distribution_uses_internal_base_path(pull_through_distribution):
+    distribution = pull_through_distribution()
+
+    UUID(distribution.base_path)
+    assert distribution.base_path != distribution.name
+    assert (
+        distribution.pulp_labels[PULL_THROUGH_DISTRIBUTION_LABEL]
+        == PULL_THROUGH_DISTRIBUTION_LABEL_VALUE
+    )
+
+
 def test_manifest_list_pull(delete_orphans_pre, pull_through_distribution, pull_and_verify):
     images = [f"{PULP_HELLO_WORLD_REPO}:latest", f"{PULP_HELLO_WORLD_REPO}:linux"]
     pull_and_verify(images, pull_through_distribution())
@@ -144,8 +159,8 @@ def test_pull_by_digest(
     # THIS TEST FAILS WHEN THE CONTENT IS ALREADY PRESENT IN PULP!!
     image1 = f"{PULP_HELLO_WORLD_REPO}@{PULP_HELLO_WORLD_LINUX_AMD64_DIGEST}"
     image2 = f"{PULP_FIXTURE_1}@{PULP_FIXTURE_1_MANIFEST_A_DIGEST}"
-    local_image_path1 = f"{full_path(pull_through_distribution())}/{image1}"
-    local_image_path2 = f"{full_path(pull_through_distribution())}/{image2}"
+    local_image_path1 = f"{full_path(pull_through_distribution().name)}/{image1}"
+    local_image_path2 = f"{full_path(pull_through_distribution().name)}/{image2}"
 
     with anonymous_user, pytest.raises(CalledProcessError):
         local_registry.pull(local_image_path1)
@@ -186,15 +201,15 @@ def test_pull_from_private_distribution(
 
     image1 = f"{PULP_HELLO_WORLD_REPO}:latest"
     image2 = f"{PULP_FIXTURE_1}:manifest_a"
-    local_image_path1 = f"{full_path(pull_through_distribution)}/{image1}"
-    local_image_path2 = f"{full_path(pull_through_distribution)}/{image2}"
+    local_image_path1 = f"{full_path(pull_through_distribution.name)}/{image1}"
+    local_image_path2 = f"{full_path(pull_through_distribution.name)}/{image2}"
 
     with anonymous_user, pytest.raises(CalledProcessError):
         local_registry.pull(local_image_path1)
 
     local_registry.pull(local_image_path1)
 
-    namespace = container_namespace_api.list(name=pull_through_distribution.base_path).results[0]
+    namespace = container_namespace_api.list(name=pull_through_distribution.name).results[0]
     add_pull_through_entities_to_cleanup(local_image_path1.split(":")[0])
 
     with anonymous_user, pytest.raises(CalledProcessError):
@@ -216,7 +231,7 @@ def test_pull_from_private_distribution(
     with gen_user(model_roles=["container.containerdistribution_collaborator"]):
         local_registry.pull(local_image_path2)
 
-    distro1_name = f"{pull_through_distribution.base_path}/{image1}".split(":")[0]
+    distro1_name = f"{pull_through_distribution.name}/{image1}".split(":")[0]
     distro1 = container_distribution_api.list(name=distro1_name).results[0]
     distro_1_collaborator = gen_user(
         object_roles=[("container.containerdistribution_collaborator", distro1.pulp_href)]
@@ -241,7 +256,7 @@ def test_conflicting_names_and_paths(
     monitor_task,
 ):
     pull_through_distribution = pull_through_distribution()
-    local_image_path = f"{pull_through_distribution.base_path}/{str(uuid4())}"
+    local_image_path = f"{pull_through_distribution.name}/{str(uuid4())}"
     local_image_pull_path = full_path(local_image_path)  # Handle if domain is enabled
 
     remote = container_remote_factory(name=local_image_path)
